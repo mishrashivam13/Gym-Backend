@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { Member } from "../models/Member";
-import { sendWelcomeEmail } from "../services/emailService";
+import { sendWelcomeWhatsApp, sendPaymentReceiptWhatsApp, sendRenewalWhatsApp } from "../services/whatsappService";
 
 export async function getMembers(req: Request, res: Response): Promise<void> {
   const { status, plan, search, page = "1", limit = "20" } = req.query as Record<string, string>;
@@ -31,36 +31,34 @@ export async function getMemberById(req: Request, res: Response): Promise<void> 
 
 export async function createMember(req: Request, res: Response): Promise<void> {
   type PayMethod = "cash" | "upi" | "card" | "bank";
-  const { name, email, phone, address, plan, planPrice, startDate, endDate, paymentMethod } =
+  const { name, email, phone, address, plan, planPrice, amountPaid, startDate, endDate, paymentMethod } =
     req.body as {
       name: string; email?: string; phone: string; address?: string;
-      plan: "basic" | "standard" | "premium" | "yearly"; planPrice: number; startDate: string; endDate: string;
-      paymentMethod?: PayMethod;
+      plan: "basic" | "standard" | "premium" | "yearly";
+      planPrice: number; amountPaid?: number;
+      startDate: string; endDate: string; paymentMethod?: PayMethod;
     };
 
-  const feeHistory = planPrice
-    ? [{ amount: Number(planPrice), date: startDate ? new Date(startDate) : new Date(), method: paymentMethod ?? "cash" as PayMethod }]
+  /* If amountPaid provided use it, otherwise fall back to full planPrice */
+  const paidNow = amountPaid !== undefined ? Number(amountPaid) : Number(planPrice);
+
+  const feeHistory = paidNow > 0
+    ? [{ amount: paidNow, date: startDate ? new Date(startDate) : new Date(), method: paymentMethod ?? "cash" as PayMethod }]
     : [];
 
   const member = await Member.create({ name, email, phone, address, plan, planPrice: Number(planPrice), startDate: new Date(startDate), endDate: new Date(endDate), feeHistory });
 
-  // Send welcome email (non-blocking)
-  if (email) {
-    const amountPaid = feeHistory.reduce((s, f) => s + f.amount, 0);
-    sendWelcomeEmail({
-      name, email, plan,
-      planPrice: Number(planPrice),
-      amountPaid,
-      startDate: new Date(startDate),
-      endDate:   new Date(endDate),
-    }).catch((err) => console.error("[Email] Welcome email failed:", err));
-  }
+  const msgData = { name, plan, planPrice: Number(planPrice), amountPaid: paidNow, startDate: new Date(startDate), endDate: new Date(endDate) };
+
+  // Send welcome WhatsApp (non-blocking)
+  sendWelcomeWhatsApp({ ...msgData, phone })
+    .catch((err) => console.error("[WhatsApp] Welcome message failed:", err));
 
   res.status(201).json(member);
 }
 
 export async function updateMember(req: Request, res: Response): Promise<void> {
-  const member = await Member.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  const member = await Member.findByIdAndUpdate(req.params.id, req.body, { returnDocument: "after", runValidators: true });
   if (!member) { res.status(404).json({ message: "Member not found" }); return; }
   res.json(member);
 }
@@ -70,11 +68,57 @@ export async function deleteMember(req: Request, res: Response): Promise<void> {
   res.json({ message: "Member deleted" });
 }
 
+export async function renewMember(req: Request, res: Response): Promise<void> {
+  type PayMethod = "cash" | "upi" | "card" | "bank";
+  const member = await Member.findById(req.params.id);
+  if (!member) { res.status(404).json({ message: "Member not found" }); return; }
+
+  const { plan, planPrice, startDate, endDate, amountPaid, paymentMethod } = req.body as {
+    plan: "basic" | "standard" | "premium" | "yearly";
+    planPrice: number; startDate: string; endDate: string;
+    amountPaid?: number; paymentMethod?: PayMethod;
+  };
+
+  const paidNow = amountPaid !== undefined ? Number(amountPaid) : 0;
+  const newStart = new Date(startDate);
+  const newEnd   = new Date(endDate);
+
+  member.plan      = plan;
+  member.planPrice = Number(planPrice);
+  member.startDate = newStart;
+  member.endDate   = newEnd;
+  member.status    = "active";
+
+  if (paidNow > 0) {
+    member.feeHistory.push({ amount: paidNow, date: newStart, method: paymentMethod ?? "cash", note: "Renewal payment" });
+  }
+
+  await member.save();
+  res.json(member);
+
+  /* Send renewal WhatsApp (non-blocking) */
+  sendRenewalWhatsApp({
+    name: member.name, phone: member.phone, plan,
+    planPrice: Number(planPrice), amountPaid: paidNow,
+    startDate: newStart, endDate: newEnd,
+  }).catch((err) => console.error("[WhatsApp] Renewal message failed:", err));
+}
+
 export async function addFeePayment(req: Request, res: Response): Promise<void> {
   const member = await Member.findById(req.params.id);
   if (!member) { res.status(404).json({ message: "Member not found" }); return; }
   const { amount, method, note, date } = req.body as { amount: number; method: string; note?: string; date?: string };
-  member.feeHistory.push({ amount, method: method as "cash", note, date: date ? new Date(date) : new Date() });
+
+  const payDate = date ? new Date(date) : new Date();
+  member.feeHistory.push({ amount, method: method as "cash", note, date: payDate });
   await member.save();
   res.json(member);
+
+  /* Send payment receipt WhatsApp (non-blocking) */
+  const totalPaid = member.feeHistory.reduce((s, f) => s + f.amount, 0);
+  sendPaymentReceiptWhatsApp({
+    name: member.name, phone: member.phone, plan: member.plan,
+    amount: Number(amount), method, date: payDate,
+    totalPaid, planPrice: member.planPrice, endDate: member.endDate,
+  }).catch((err) => console.error("[WhatsApp] Receipt failed:", err));
 }

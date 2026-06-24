@@ -27,7 +27,7 @@ export async function adminLogin(req: Request, res: Response): Promise<void> {
   const token = jwt.sign(
     { adminId: admin._id.toString(), email: admin.email },
     config.jwtSecret,
-    { expiresIn: "8h" }
+    { expiresIn: "30d" }
   );
 
   res.json({ token, message: "Login successful", name: admin.name });

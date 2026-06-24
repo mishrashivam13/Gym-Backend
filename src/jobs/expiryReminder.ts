@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Member } from "../models/Member";
-import { sendExpiryReminderEmail } from "../services/emailService";
+import { sendExpiryReminderWhatsApp } from "../services/whatsappService";
 
 /* Runs every day at 9:00 AM */
 export function startExpiryReminderJob(): void {
@@ -25,16 +25,12 @@ export function startExpiryReminderJob(): void {
 
     for (const m of members) {
       const daysLeft = Math.ceil((m.endDate.getTime() - now.getTime()) / 86400000);
+      const reminderData = { name: m.name, plan: m.plan, endDate: m.endDate, daysLeft };
+
       try {
-        await sendExpiryReminderEmail({
-          name:     m.name,
-          email:    m.email!,
-          plan:     m.plan,
-          endDate:  m.endDate,
-          daysLeft,
-        });
+        await sendExpiryReminderWhatsApp({ ...reminderData, phone: m.phone });
       } catch (err) {
-        console.error(`[Cron] Failed to send reminder to ${m.email}:`, err);
+        console.error(`[Cron] WhatsApp reminder failed for ${m.phone}:`, err);
       }
     }
   });

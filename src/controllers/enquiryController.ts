@@ -30,7 +30,7 @@ export async function updateEnquiryStatus(req: Request, res: Response): Promise<
   const enquiry = await Enquiry.findByIdAndUpdate(
     req.params.id,
     { status, ...(note !== undefined && { note }) },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!enquiry) { res.status(404).json({ message: "Enquiry not found" }); return; }
   res.json(enquiry);

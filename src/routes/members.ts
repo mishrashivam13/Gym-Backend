@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getMembers, getMemberById, createMember, updateMember, deleteMember, addFeePayment } from "../controllers/memberController";
+import { getMembers, getMemberById, createMember, updateMember, deleteMember, addFeePayment, renewMember } from "../controllers/memberController";
 import { downloadPaymentReceipt, downloadFullReceipt } from "../controllers/receiptController";
 import { requireAuth } from "../middleware/auth";
 
@@ -12,6 +12,7 @@ router.post("/", createMember);
 router.put("/:id", updateMember);
 router.delete("/:id", deleteMember);
 router.post("/:id/fee", addFeePayment);
+router.post("/:id/renew", renewMember);
 router.get("/:id/receipt", downloadFullReceipt);
 router.get("/:id/receipt/:index", downloadPaymentReceipt);
 
