@@ -9,6 +9,7 @@ export interface IEnquiry extends Document {
   message: string;
   status: EnquiryStatus;
   note?: string;
+  source?: "walk-in" | "online" | "referral" | "chatbot" | "other";
 }
 
 const enquirySchema = new Schema<IEnquiry>(
@@ -18,7 +19,8 @@ const enquirySchema = new Schema<IEnquiry>(
     phone: { type: String, required: true, trim: true },
     message: { type: String, required: true },
     status: { type: String, enum: ["new", "contacted", "closed"], default: "new" },
-    note: { type: String },
+    note:   { type: String },
+    source: { type: String, enum: ["walk-in", "online", "referral", "chatbot", "other"] },
   },
   { timestamps: true }
 );

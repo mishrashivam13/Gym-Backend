@@ -25,6 +25,7 @@ export const config = {
     pass: process.env.SMTP_PASS ?? "",
     from: process.env.SMTP_FROM ?? "Centrum Gym <no-reply@centrumgym.com>",
   },
+  groqApiKey: process.env.GROQ_API_KEY ?? "",
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID ?? "",
     authToken:  process.env.TWILIO_AUTH_TOKEN  ?? "",
