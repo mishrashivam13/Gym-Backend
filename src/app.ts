@@ -22,6 +22,10 @@ app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 app.use(express.static("public"));
 
+app.get("/", (_req, res) => {
+  res.json({ status: "ok", service: "Centrum Gym Backend", version: "1.0.0" });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "centrum-gym-backend" });
 });
